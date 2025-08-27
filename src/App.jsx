@@ -3,7 +3,8 @@ import mqtt from "mqtt";
 
 function App() {
   const [lampStatus, setLampStatus] = useState("Mati"); // status lampu
-  const [connectionStatus, setConnectionStatus] = useState("Disconnected"); // status koneksi
+  const [connectionStatus, setConnectionStatus] = useState("Disconnected"); // status koneksi broker
+  const [espStatus, setEspStatus] = useState("Unknown"); // status ESP32
   const clientRef = useRef(null);
 
   useEffect(() => {
@@ -34,9 +35,19 @@ function App() {
 
     mqttClient.on("message", (topic, message) => {
       if (topic === "trafficlight/status") {
-        setLampStatus(message.toString());
+        const msg = message.toString();
+
+        if (msg === "ONLINE") {
+          setEspStatus("ONLINE");
+        } else if (msg === "OFFLINE") {
+          setEspStatus("OFFLINE");
+          setLampStatus("Mati"); // langsung matikan lampu biar ga stack
+        } else {
+          setLampStatus(msg); // status lampu: Merah, Kuning, Hijau, dll
+        }
       }
     });
+
 
     mqttClient.on("error", (err) => {
       console.error("MQTT error:", err);
@@ -48,19 +59,27 @@ function App() {
     return () => mqttClient.end();
   }, []);
 
-  const handleOn = () => clientRef.current?.publish("trafficlight/control", "ON");
-  const handleOff = () => clientRef.current?.publish("trafficlight/control", "OFF");
+  const handleOn = () =>
+    clientRef.current?.publish("trafficlight/control", "ON");
+  const handleOff = () =>
+    clientRef.current?.publish("trafficlight/control", "OFF");
 
   const getLampColor = (lamp) => {
     if (lampStatus === "Mati") return "bg-gray-300";
 
     switch (lamp) {
       case "Merah":
-        return lampStatus.includes("Merah") ? "bg-red-500 shadow-red-400" : "bg-gray-300";
+        return lampStatus.includes("Merah")
+          ? "bg-red-500 shadow-red-400"
+          : "bg-gray-300";
       case "Kuning":
-        return lampStatus.includes("Kuning") ? "bg-yellow-400 shadow-yellow-300" : "bg-gray-300";
+        return lampStatus.includes("Kuning")
+          ? "bg-yellow-400 shadow-yellow-300"
+          : "bg-gray-300";
       case "Hijau":
-        return lampStatus.includes("Hijau") ? "bg-green-500 shadow-green-400" : "bg-gray-300";
+        return lampStatus.includes("Hijau")
+          ? "bg-green-500 shadow-green-400"
+          : "bg-gray-300";
       default:
         return "bg-gray-300";
     }
@@ -72,9 +91,9 @@ function App() {
         Traffic Light Control
       </h1>
 
-      {/* Status koneksi */}
+      {/* Status koneksi broker */}
       <div
-        className={`px-4 py-1 mb-6 rounded-lg font-semibold text-white ${connectionStatus === "Connected"
+        className={`px-4 py-1 mb-2 rounded-lg font-semibold text-white ${connectionStatus === "Connected"
           ? "bg-green-500"
           : connectionStatus === "Disconnected"
             ? "bg-gray-500"
@@ -83,30 +102,59 @@ function App() {
               : "bg-yellow-400"
           }`}
       >
-        {connectionStatus}
+        Broker: {connectionStatus}
+      </div>
+
+      {/* Status ESP32 */}
+      <div
+        className={`px-4 py-1 mb-6 rounded-lg font-semibold text-white ${espStatus === "ONLINE"
+          ? "bg-green-600"
+          : espStatus === "OFFLINE"
+            ? "bg-red-600"
+            : "bg-gray-500"
+          }`}
+      >
+        ESP32: {espStatus}
       </div>
 
       {/* Traffic Light Box */}
       <div className="w-24 p-4 bg-gray-800 rounded-3xl flex flex-col items-center gap-4 shadow-lg">
-        <div className={`w-16 h-16 rounded-full ${getLampColor("Merah")} transition-all duration-500`}></div>
-        <div className={`w-16 h-16 rounded-full ${getLampColor("Kuning")} transition-all duration-500`}></div>
-        <div className={`w-16 h-16 rounded-full ${getLampColor("Hijau")} transition-all duration-500`}></div>
+        <div
+          className={`w-16 h-16 rounded-full ${getLampColor(
+            "Merah"
+          )} transition-all duration-500`}
+        ></div>
+        <div
+          className={`w-16 h-16 rounded-full ${getLampColor(
+            "Kuning"
+          )} transition-all duration-500`}
+        ></div>
+        <div
+          className={`w-16 h-16 rounded-full ${getLampColor(
+            "Hijau"
+          )} transition-all duration-500`}
+        ></div>
       </div>
 
       {/* Status Lampu */}
-      <span className="mt-4 text-lg font-semibold text-gray-700">{lampStatus}</span>
+      <span className="mt-4 text-lg font-semibold text-gray-700">
+        {lampStatus}
+      </span>
 
       {/* Tombol kontrol */}
       <div className="flex gap-6 mt-6">
         <button
           onClick={(e) => {
             handleOn();
-            // reset animasi biar bisa diputar tiap klik
             e.currentTarget.classList.remove("animate-click");
             void e.currentTarget.offsetWidth;
             e.currentTarget.classList.add("animate-click");
           }}
-          disabled={connectionStatus !== "Connected" && connectionStatus !== "...."}
+          disabled={
+            (connectionStatus !== "Connected" && connectionStatus !== "....")
+            || espStatus !== "ONLINE"
+          }
+
           className="px-6 py-3 bg-green-500 text-white font-bold rounded-xl shadow-lg 
                hover:bg-green-600 transition duration-200 
                disabled:opacity-50 disabled:cursor-not-allowed"
@@ -121,7 +169,11 @@ function App() {
             void e.currentTarget.offsetWidth;
             e.currentTarget.classList.add("animate-click");
           }}
-          disabled={connectionStatus !== "Connected" && connectionStatus !== "...."}
+          disabled={
+            (connectionStatus !== "Connected" && connectionStatus !== "....")
+            || espStatus !== "ONLINE"
+          }
+
           className="px-6 py-3 bg-red-500 text-white font-bold rounded-xl shadow-lg 
                hover:bg-red-600 transition duration-200 
                 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -129,7 +181,6 @@ function App() {
           OFF
         </button>
       </div>
-
     </div>
   );
 }
