@@ -22,9 +22,14 @@ function App() {
       setConnectionStatus("Reconnecting");
     });
 
-    mqttClient.on("close", () => {
+    mqttClient.on("offline", () => {
       console.log("Disconnected dari broker");
       setConnectionStatus("Disconnected");
+    });
+
+    mqttClient.on("close", () => {
+      console.log("Socket tertutup");
+      setConnectionStatus("....");
     });
 
     mqttClient.on("message", (topic, message) => {
@@ -70,12 +75,12 @@ function App() {
       {/* Status koneksi */}
       <div
         className={`px-4 py-1 mb-6 rounded-lg font-semibold text-white ${connectionStatus === "Connected"
-            ? "bg-green-500"
-            : connectionStatus === "Disconnected"
-              ? "bg-gray-500"
-              : connectionStatus === "Error"
-                ? "bg-red-500"
-                : "bg-yellow-400"
+          ? "bg-green-500"
+          : connectionStatus === "Disconnected"
+            ? "bg-gray-500"
+            : connectionStatus === "Error"
+              ? "bg-red-500"
+              : "bg-yellow-400"
           }`}
       >
         {connectionStatus}
@@ -101,7 +106,7 @@ function App() {
             void e.currentTarget.offsetWidth;
             e.currentTarget.classList.add("animate-click");
           }}
-          disabled={connectionStatus !== "Connected"}
+          disabled={connectionStatus !== "Connected" && connectionStatus !== "...."}
           className="px-6 py-3 bg-green-500 text-white font-bold rounded-xl shadow-lg 
                hover:bg-green-600 transition duration-200 
                disabled:opacity-50 disabled:cursor-not-allowed"
@@ -116,7 +121,7 @@ function App() {
             void e.currentTarget.offsetWidth;
             e.currentTarget.classList.add("animate-click");
           }}
-          disabled={connectionStatus !== "Connected"}
+          disabled={connectionStatus !== "Connected" && connectionStatus !== "...."}
           className="px-6 py-3 bg-red-500 text-white font-bold rounded-xl shadow-lg 
                hover:bg-red-600 transition duration-200 
                 disabled:opacity-50 disabled:cursor-not-allowed"
