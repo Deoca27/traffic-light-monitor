@@ -4,8 +4,11 @@ import mqtt from "mqtt";
 function App() {
   const [lampStatus, setLampStatus] = useState("Mati"); // status lampu
   const [connectionStatus, setConnectionStatus] = useState("Disconnected"); // status koneksi broker
-  const [espStatus, setEspStatus] = useState("Unknown"); // status ESP32
+  const [espStatus, setEspStatus] = useState("OFFLINE"); // status ESP32
   const clientRef = useRef(null);
+
+  // untuk heartbeat
+  const lastPingRef = useRef(Date.now());
 
   useEffect(() => {
     const mqttClient = mqtt.connect("wss://test.mosquitto.org:8081");
@@ -13,8 +16,13 @@ function App() {
     mqttClient.on("connect", () => {
       console.log("Terhubung ke MQTT broker");
       setConnectionStatus("Connected");
+
       mqttClient.subscribe("trafficlight/status", (err) => {
         if (!err) console.log("Subscribed ke trafficlight/status");
+      });
+
+      mqttClient.subscribe("trafficlight/heartbeat", (err) => {
+        if (!err) console.log("Subscribed ke trafficlight/heartbeat");
       });
     });
 
@@ -34,20 +42,22 @@ function App() {
     });
 
     mqttClient.on("message", (topic, message) => {
-      if (topic === "trafficlight/status") {
-        const msg = message.toString();
+      const msg = message.toString();
 
-        if (msg === "ONLINE") {
-          setEspStatus("ONLINE");
-        } else if (msg === "OFFLINE") {
-          setEspStatus("OFFLINE");
-          setLampStatus("Mati"); // langsung matikan lampu biar ga stack
+      if (topic === "trafficlight/status") {
+        if (msg === "Mati") {
+          setLampStatus("Mati");
         } else {
           setLampStatus(msg); // status lampu: Merah, Kuning, Hijau, dll
         }
       }
-    });
 
+      if (topic === "trafficlight/heartbeat") {
+        // update timestamp heartbeat terakhir
+        lastPingRef.current = Date.now();
+        if (espStatus !== "ONLINE") setEspStatus("ONLINE");
+      }
+    });
 
     mqttClient.on("error", (err) => {
       console.error("MQTT error:", err);
@@ -56,7 +66,18 @@ function App() {
 
     clientRef.current = mqttClient;
 
-    return () => mqttClient.end();
+    // interval untuk cek timeout heartbeat (offline)
+    const checkInterval = setInterval(() => {
+      if (Date.now() - lastPingRef.current > 5000) {
+        setEspStatus("OFFLINE");
+        setLampStatus("Mati"); // pastikan lampu tidak aktif di UI
+      }
+    }, 1000);
+
+    return () => {
+      mqttClient.end();
+      clearInterval(checkInterval);
+    };
   }, []);
 
   const handleOn = () =>
@@ -93,26 +114,26 @@ function App() {
 
       {/* Status koneksi broker */}
       <div
-        className={`px-4 py-1 mb-2 rounded-lg font-semibold text-white ${connectionStatus === "Connected"
-          ? "bg-green-500"
-          : connectionStatus === "Disconnected"
+        className={`px-4 py-1 mb-2 rounded-lg font-semibold text-white ${
+          connectionStatus === "Connected"
+            ? "bg-green-500"
+            : connectionStatus === "Disconnected"
             ? "bg-gray-500"
             : connectionStatus === "Error"
-              ? "bg-red-500"
-              : "bg-yellow-400"
-          }`}
+            ? "bg-red-500"
+            : "bg-yellow-400"
+        }`}
       >
         Broker: {connectionStatus}
       </div>
 
       {/* Status ESP32 */}
       <div
-        className={`px-4 py-1 mb-6 rounded-lg font-semibold text-white ${espStatus === "ONLINE"
-          ? "bg-green-600"
-          : espStatus === "OFFLINE"
-            ? "bg-red-600"
-            : "bg-gray-500"
-          }`}
+        className={`px-4 py-1 mb-6 rounded-lg font-semibold text-white ${
+          espStatus === "ONLINE"
+            ? "bg-green-600"
+            : "bg-red-600"
+        }`}
       >
         ESP32: {espStatus}
       </div>
@@ -151,10 +172,9 @@ function App() {
             e.currentTarget.classList.add("animate-click");
           }}
           disabled={
-            (connectionStatus !== "Connected" && connectionStatus !== "....")
-            || espStatus !== "ONLINE"
+            (connectionStatus !== "Connected" && connectionStatus !== "....") ||
+            espStatus !== "ONLINE"
           }
-
           className="px-6 py-3 bg-green-500 text-white font-bold rounded-xl shadow-lg 
                hover:bg-green-600 transition duration-200 
                disabled:opacity-50 disabled:cursor-not-allowed"
@@ -170,10 +190,9 @@ function App() {
             e.currentTarget.classList.add("animate-click");
           }}
           disabled={
-            (connectionStatus !== "Connected" && connectionStatus !== "....")
-            || espStatus !== "ONLINE"
+            (connectionStatus !== "Connected" && connectionStatus !== "....") ||
+            espStatus !== "ONLINE"
           }
-
           className="px-6 py-3 bg-red-500 text-white font-bold rounded-xl shadow-lg 
                hover:bg-red-600 transition duration-200 
                 disabled:opacity-50 disabled:cursor-not-allowed"
