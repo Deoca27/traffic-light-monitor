@@ -7,8 +7,13 @@ function App() {
   const [espStatus, setEspStatus] = useState("OFFLINE"); // status ESP32
   const clientRef = useRef(null);
 
-  // untuk heartbeat
   const lastPingRef = useRef(Date.now());
+  const espStatusRef = useRef(espStatus);
+
+  // sync espStatusRef dengan state espStatus
+  useEffect(() => {
+    espStatusRef.current = espStatus;
+  }, [espStatus]);
 
   useEffect(() => {
     const mqttClient = mqtt.connect("wss://test.mosquitto.org:8081");
@@ -45,17 +50,12 @@ function App() {
       const msg = message.toString();
 
       if (topic === "trafficlight/status") {
-        if (msg === "Mati") {
-          setLampStatus("Mati");
-        } else {
-          setLampStatus(msg); // status lampu: Merah, Kuning, Hijau, dll
-        }
+        setLampStatus(msg === "Mati" ? "Mati" : msg);
       }
 
       if (topic === "trafficlight/heartbeat") {
-        // update timestamp heartbeat terakhir
         lastPingRef.current = Date.now();
-        if (espStatus !== "ONLINE") setEspStatus("ONLINE");
+        if (espStatusRef.current !== "ONLINE") setEspStatus("ONLINE");
       }
     });
 
@@ -66,11 +66,10 @@ function App() {
 
     clientRef.current = mqttClient;
 
-    // interval untuk cek timeout heartbeat (offline)
     const checkInterval = setInterval(() => {
       if (Date.now() - lastPingRef.current > 5000) {
         setEspStatus("OFFLINE");
-        setLampStatus("Mati"); // pastikan lampu tidak aktif di UI
+        setLampStatus("Mati");
       }
     }, 1000);
 
@@ -78,7 +77,7 @@ function App() {
       mqttClient.end();
       clearInterval(checkInterval);
     };
-  }, []);
+  }, []); // sekarang tidak ada warning eslint
 
   const handleOn = () =>
     clientRef.current?.publish("trafficlight/control", "ON");
@@ -112,7 +111,6 @@ function App() {
         Traffic Light Control
       </h1>
 
-      {/* Status koneksi broker */}
       <div
         className={`px-4 py-1 mb-2 rounded-lg font-semibold text-white ${
           connectionStatus === "Connected"
@@ -127,18 +125,14 @@ function App() {
         Broker: {connectionStatus}
       </div>
 
-      {/* Status ESP32 */}
       <div
         className={`px-4 py-1 mb-6 rounded-lg font-semibold text-white ${
-          espStatus === "ONLINE"
-            ? "bg-green-600"
-            : "bg-red-600"
+          espStatus === "ONLINE" ? "bg-green-600" : "bg-red-600"
         }`}
       >
         ESP32: {espStatus}
       </div>
 
-      {/* Traffic Light Box */}
       <div className="w-24 p-4 bg-gray-800 rounded-3xl flex flex-col items-center gap-4 shadow-lg">
         <div
           className={`w-16 h-16 rounded-full ${getLampColor(
@@ -157,12 +151,10 @@ function App() {
         ></div>
       </div>
 
-      {/* Status Lampu */}
       <span className="mt-4 text-lg font-semibold text-gray-700">
         {lampStatus}
       </span>
 
-      {/* Tombol kontrol */}
       <div className="flex gap-6 mt-6">
         <button
           onClick={(e) => {
